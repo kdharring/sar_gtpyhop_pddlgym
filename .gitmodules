@@ -1,0 +1,9 @@
+[submodule "GTPyhop"]
+	path = GTPyhop
+	url = https://github.com/dananau/GTPyhop.git
+[submodule "pddlgym"]
+	path = pddlgym
+	url = https://github.com/kdharring/pddlgym_722.git
+[submodule "pddlgym_planners"]
+	path = pddlgym_planners
+	url = https://github.com/ronuchit/pddlgym_planners.git
