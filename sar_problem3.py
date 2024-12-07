@@ -8,8 +8,8 @@ import sar_domain
 
 the_domain = sar_domain.domain
 
-rigid = sar_domain.rigid.copy()
-initial = sar_domain.initial.copy()
+rigid = sar_domain.empty_rigid()
+initial = sar_domain.empty_initial()
 
 rigid.types = {
     'direction' : ['up', 'down', 'left', 'right'],
@@ -125,7 +125,7 @@ walls = [('wall2-2','f2-2f'), ('wall2-3','f2-3f'), ('wall2-4','f2-4f'),
 for wall, loc in walls:
     rigid.relations['wall-at'][wall] = loc
 
-initial.robot_at['robot0'] = 'f0-3f'
+initial.robot_at['robot0'] = 'f0-2f'
 initial.person_at['person0'] = 'f5-2f'
 initial.person_at['person1'] = 'f1-5f'
 initial.carrying['robot0'] = None
@@ -139,7 +139,7 @@ goal = [('person_at', 'person1', 'f5-5f'), ('person_at', 'person0', 'f5-5f')]
 
 def main():
     sar_domain.rigid = rigid
-    sar_domain.run_lookahead(initial, goal, 45, render=True)    
+    sar_domain.run_lookahead(initial, goal, 46, render=True)    
 
 if __name__ == "__main__":
     main()

@@ -1,7 +1,8 @@
-import sar_problem1, sar_problem2, sar_domain, pddl_sar_plan
-import matplotlib.pyplot as plt
+import sar_problem1, sar_problem2, sar_problem3, sar_domain, pddl_sar_plan
+import matplotlib.pyplot as plt, threading, json, gc
+from pddlgym_planners.planner import PlanningFailure, PlanningTimeout
 
-def create_plans(problem_num=0):
+def create_plans_gt(problem_num=0):
     results = {}
 
     if problem_num == 0:
@@ -15,26 +16,50 @@ def create_plans(problem_num=0):
         gt_rigid = sar_problem2.rigid
         sar_domain.rigid = gt_rigid
         goal = sar_problem2.goal
-        gym_prob = 45
-    elif problem_num == 1:
-        gt_initial = sar_problem2.initial
-        gt_rigid = sar_problem2.rigid
+        gym_prob = 40
+    elif problem_num == 2:
+        gt_initial = sar_problem3.initial
+        gt_rigid = sar_problem3.rigid
         sar_domain.rigid = gt_rigid
-        goal = sar_problem2.goal
-        gym_prob = 50
+        goal = sar_problem3.goal
+        gym_prob = 46
     
     gt_errors = 0
 
     while results.get('gt') is None:
         try:
-            gt_plan_len, gt_nodes_exp = sar_domain.create_plan(gt_initial, goal)
+            gt_plan_len, gt_nodes_exp = sar_domain.create_plan(gt_initial, goal,)
             results['gt'] = (gt_plan_len, gt_nodes_exp)
         except RecursionError:
             print("GTPyhop Recursion Error")
             gt_errors += 1
 
+    return results, gt_errors
+
+def create_plans_ff(problem_num=0):
+    results = {}
+
+    if problem_num == 0:
+        gym_prob = 0
+    elif problem_num == 1:
+        gym_prob = 40
+    elif problem_num == 2:
+        gym_prob = 46
+
     ff_plan_len, ff_nodes_exp = pddl_sar_plan.create_plan_ff(gym_prob)
     results['ff'] = (ff_plan_len, ff_nodes_exp)
+
+    return results
+
+def create_plans_fd(problem_num=0):
+    results = {}
+
+    if problem_num == 0:
+        gym_prob = 0
+    elif problem_num == 1:
+        gym_prob = 40
+    elif problem_num == 2:
+        gym_prob = 46
 
     fd_blind_plan_len, fd_blind_nodes_exp = pddl_sar_plan.create_plan_fd(
         gym_prob, '--search "astar(blind())"')
@@ -52,9 +77,9 @@ def create_plans(problem_num=0):
         gym_prob, '--evaluator "hcea=cea()" --search "lazy_greedy([hcea])"')
     results['fd_cea'] = (fd_add_plan_len, fd_add_nodes_exp)
 
-    return results, gt_errors
+    return results
 
-def run_acting(problem_num=0):
+def run_acting_gt(problem_num=0):
     results = {}
 
     if problem_num == 0:
@@ -68,102 +93,229 @@ def run_acting(problem_num=0):
         gt_rigid = sar_problem2.rigid
         sar_domain.rigid = gt_rigid
         goal = sar_problem2.goal
-        gym_prob = 45
+        gym_prob = 40
+    elif problem_num == 2:
+        gt_initial = sar_problem3.initial
+        gt_rigid = sar_problem3.rigid
+        sar_domain.rigid = gt_rigid
+        goal = sar_problem3.goal
+        gym_prob = 46
 
-    lazy_gt_results = sar_domain.run_lazy_lookahead(gt_initial, goal, gym_prob)
+    lazy_gt_results = sar_domain.run_lazy_lookahead(gt_initial, goal, prob_idx=gym_prob)
     results['lazy_gt'] = lazy_gt_results[:2]
-    run_gt_results = sar_domain.run_lookahead(gt_initial, goal, gym_prob)
+    run_gt_results = sar_domain.run_lookahead(gt_initial, goal, prob_idx=gym_prob)
     results['run_gt'] = run_gt_results[:2]
     gt_recurse_errors = lazy_gt_results[2] + run_gt_results[2]
+
+    return results, gt_recurse_errors
+
+def run_acting_ff(problem_num=0):
+    results = {}
+
+    if problem_num == 0:
+        gym_prob = 0
+    elif problem_num == 1:
+        gym_prob = 40
+    elif problem_num == 2:
+        gym_prob = 46
 
     results['lazy_ff'] = pddl_sar_plan.run_lazy_lookahead_ff(gym_prob)
     results['run_ff'] = pddl_sar_plan.run_lookahead_ff(gym_prob)
 
-    results['lazy_fd_blind'] = pddl_sar_plan.run_lazy_lookahead_fd(
-        gym_prob, '--search "astar(blind())"')
-    results['run_fd_blind'] = pddl_sar_plan.run_lookahead_fd(
-        gym_prob, '--search "astar(blind())"')
-    
-    results['lazy_fd_lmcut'] = pddl_sar_plan.run_lazy_lookahead_fd(
-        gym_prob, '--search "astar(lmcut())"')
-    results['run_fd_lmcut'] = pddl_sar_plan.run_lookahead_fd(
-        gym_prob, '--search "astar(lmcut())"')
-    
-    results['lazy_fd_ff'] = pddl_sar_plan.run_lazy_lookahead_fd(
-        gym_prob, 
-        '--evaluator "hff=ff()" --search "lazy_greedy([hff])"')
-    results['run_fd_ff'] = pddl_sar_plan.run_lookahead_fd(
-        gym_prob, 
-        '--evaluator "hff=ff()" --search "lazy_greedy([hff])"')
-    
-    results['lazy_fd_cea'] = pddl_sar_plan.run_lazy_lookahead_fd(
-        gym_prob, 
-        '--evaluator "hcea=cea()" --search "lazy_greedy([hcea])"')
-    results['run_fd_cea'] = pddl_sar_plan.run_lookahead_fd(
-        gym_prob, 
-        '--evaluator "hcea=cea()" --search "lazy_greedy([hcea])"',)
+    return results
 
-    return results, gt_recurse_errors
+def run_acting_fd(problem_num=0):
+    results = {}
+
+    if problem_num == 0:
+        gym_prob = 0
+    elif problem_num == 1:
+        gym_prob = 40
+    elif problem_num == 2:
+        gym_prob = 46
+
+    fd_failures = 0
+
+    try:
+        results['lazy_fd_blind'] = pddl_sar_plan.run_lazy_lookahead_fd(
+            gym_prob, '--search "astar(blind())"')
+    except (PlanningTimeout, PlanningFailure):
+        print("FD Failure")
+        fd_failures += 1
     
+    try:
+        results['run_fd_blind'] = pddl_sar_plan.run_lookahead_fd(
+            gym_prob, '--search "astar(blind())"')
+    except (PlanningTimeout, PlanningFailure):
+        print("FD Failure")
+        fd_failures += 1
+    
+    try:
+        results['lazy_fd_lmcut'] = pddl_sar_plan.run_lazy_lookahead_fd(
+            gym_prob, '--search "astar(lmcut())"')
+    except (PlanningTimeout, PlanningFailure):
+        print("FD Failure")
+        fd_failures += 1
+
+    try:
+        results['run_fd_lmcut'] = pddl_sar_plan.run_lookahead_fd(
+            gym_prob, '--search "astar(lmcut())"')
+    except (PlanningTimeout, PlanningFailure):
+        print("FD Failure")
+        fd_failures += 1
+    
+    try:
+        results['lazy_fd_ff'] = pddl_sar_plan.run_lazy_lookahead_fd(
+            gym_prob, 
+            '--evaluator "hff=ff()" --search "lazy_greedy([hff])"')
+    except (PlanningTimeout, PlanningFailure):
+        print("FD Failure")
+        fd_failures += 1
+
+    try:
+        results['run_fd_ff'] = pddl_sar_plan.run_lookahead_fd(
+            gym_prob, 
+            '--evaluator "hff=ff()" --search "lazy_greedy([hff])"')
+    except (PlanningTimeout, PlanningFailure):
+        print("FD Failure")
+        fd_failures += 1
+    
+    try:
+        results['lazy_fd_cea'] = pddl_sar_plan.run_lazy_lookahead_fd(
+            gym_prob, 
+            '--evaluator "hcea=cea()" --search "lazy_greedy([hcea])"')
+    except (PlanningTimeout, PlanningFailure):
+        print("FD Failure")
+        fd_failures += 1
+
+    try:
+        results['run_fd_cea'] = pddl_sar_plan.run_lookahead_fd(
+            gym_prob, 
+            '--evaluator "hcea=cea()" --search "lazy_greedy([hcea])"')
+    except (PlanningTimeout, PlanningFailure):
+        print("FD Failure")
+        fd_failures += 1
+
+    return results, fd_failures
+
+def eval_gt(num_tests):
+    problem_results = {}
+
+    for problem in range(3):
+        results = {}
+        results['expansions'] = {}
+        results['plan_lengths'] = {}
+        results['act_lengths'] = {}
+        results['act_times'] = {}
+        results['total_gt_errors'] = 0
+
+        for _ in range(num_tests):
+            gc.collect()
+            
+            plan_results, gt_errors = create_plans_gt(problem_num=problem)
+
+            results['total_gt_errors'] += gt_errors
+            
+            for key in plan_results.keys():
+                results['plan_lengths'][key] = results['plan_lengths'].get(key, []) + [plan_results[key][0]]
+                results['expansions'][key] = results['expansions'].get(key, []) + [plan_results[key][1]]
+
+            act_results, gt_errors = run_acting_gt(problem_num=problem)
+            results['total_gt_errors'] += gt_errors
+            for key in act_results.keys():
+                results['act_lengths'][key] = results['act_lengths'].get(key, []) + [act_results[key][1]]
+                results['act_times'][key] = results['act_times'].get(key, []) + [act_results[key][0]]
+
+        problem_results[problem] = results
+        print(f"GTPythop Done Problem {problem + 1}/3")
+
+    with open('gtpyhop_eval_results.json', 'w') as results_file:
+        json.dump(problem_results, results_file)
+
+    gc.collect()
+
+def eval_ff(num_tests):
+    problem_results = {}
+
+    for problem in range(3):
+        results = {}
+        results['expansions'] = {}
+        results['plan_lengths'] = {}
+        results['act_lengths'] = {}
+        results['act_times'] = {}
+
+        for _ in range(num_tests):
+            gc.collect()
+            
+            plan_results = create_plans_ff(problem_num=problem)
+            for key in plan_results.keys():
+                results['plan_lengths'][key] = results['plan_lengths'].get(key, []) + [plan_results[key][0]]
+                results['expansions'][key] = results['expansions'].get(key, []) + [plan_results[key][1]]
+
+            act_results = run_acting_ff(problem_num=problem)
+            for key in act_results.keys():
+                results['act_lengths'][key] = results['act_lengths'].get(key, []) + [act_results[key][1]]
+                results['act_times'][key] = results['act_times'].get(key, []) + [act_results[key][0]]
+
+        problem_results[problem] = results
+        print(f"FF Done Problem {problem + 1}/3")
+
+    with open('ff_eval_results.json', 'w') as results_file:
+        json.dump(problem_results, results_file)
+
+    gc.collect()
+
+def eval_fd(num_tests):
+    problem_results = {}
+
+    for problem in range(3):
+        results = {}
+        results['expansions'] = {}
+        results['plan_lengths'] = {}
+        results['act_lengths'] = {}
+        results['act_times'] = {}
+        results['total_fd_errors'] = 0
+
+        for _ in range(num_tests):
+            gc.collect()
+            
+            plan_results = create_plans_fd(problem_num=problem)
+            
+            for key in plan_results.keys():
+                results['plan_lengths'][key] = results['plan_lengths'].get(key, []) + [plan_results[key][0]]
+                results['expansions'][key] = results['expansions'].get(key, []) + [plan_results[key][1]]
+
+            act_results, fd_failures = run_acting_fd(problem_num=problem)
+            for key in act_results.keys():
+                results['act_lengths'][key] = results['act_lengths'].get(key, []) + [act_results[key][1]]
+                results['act_times'][key] = results['act_times'].get(key, []) + [act_results[key][0]]
+
+            results['total_fd_errors'] += fd_failures
+
+        problem_results[problem] = results
+        print(f"FD Done Problem {problem + 1}/3")
+
+    with open('fd_eval_results.json', 'w') as results_file:
+        json.dump(problem_results, results_file)
+
+    gc.collect()
 
 def main():
-    num_tests = 3
-    expansions = {}
-    plan_lengths = {}
-    act_lengths = {}
-    act_times = {}
+    num_tests = 5
 
-    total_gt_errors = 0
+    gt_thread = threading.Thread(target=eval_gt, args=(num_tests,))  
+    ff_thread = threading.Thread(target=eval_ff, args=(num_tests,))
+    fd_thread = threading.Thread(target=eval_fd, args=(num_tests,))
 
-    for _ in range(num_tests):
-        plan_results, gt_errors = create_plans()
+    threads = [gt_thread, ff_thread, fd_thread]
 
-        total_gt_errors += gt_errors
-        
-        for key in plan_results.keys():
-            plan_lengths[key] = plan_lengths.get(key, []) + [plan_results[key][0]]
-            expansions[key] = expansions.get(key, []) + [plan_results[key][1]]
+    for thread in threads:
+        thread.start()
 
-        act_results, gt_errors = run_acting()
-        total_gt_errors += gt_errors
-        for key in act_results.keys():
-            act_lengths[key] = act_lengths.get(key, []) + [act_results[key][1]]
-            act_times[key] = act_times.get(key, []) + [act_results[key][0]]
-        
+    for thread in threads:
+        thread.join()
 
-    fig, axes = plt.subplots(2, 2, figsize=(8, 6), tight_layout=True)
-
-    print("Total GT recursions errors: ", total_gt_errors)
-    
-    axes[0, 0].set_ylabel('Node expansions')
-    axes[0, 0].set_title(f'Node expansions over Methods (N={num_tests})')
-    axes[0, 0].boxplot(expansions.values(), tick_labels=expansions.keys())
-    axes[0, 0].set_yscale('log')
-    axes[0, 0].tick_params(axis='y', which='minor')
-
-    axes[0, 1].set_ylabel('Plan Path Lengths')
-    axes[0, 1].set_title(f'Plan Path Lengths over Methods (N={num_tests})')
-    axes[0, 1].boxplot(plan_lengths.values(), tick_labels=plan_lengths.keys())
-    axes[0, 1].set_yscale('log')
-    axes[0, 1].tick_params(axis='y', which='minor')
-
-    axes[1, 0].set_ylabel('Acting Path Lengths')
-    axes[1, 0].set_title(f'Acting Path Lengths over Methods (N={num_tests})')
-    axes[1, 0].boxplot(act_lengths.values(), tick_labels=act_lengths.keys())
-    axes[1, 0].set_yscale('log')
-    axes[1, 0].tick_params(axis='x', labelrotation=90)
-    axes[1, 0].tick_params(axis='y', which='minor')
-
-    axes[1, 1].set_ylabel('Acting times (msec)')
-    axes[1, 1].set_title(f'Acting Times over Methods (N={num_tests})')
-    axes[1, 1].boxplot(act_times.values(), tick_labels=act_times.keys())
-    axes[1, 1].set_yscale('log')
-    axes[1, 1].tick_params(axis='x', labelrotation=90)
-    axes[1, 1].tick_params(axis='y', which='minor')
-
-    fig.suptitle("SearchAndRescue-7 Problem 0 Evaluation")
-
-    plt.show()
+    gc.collect()
 
 if __name__ == '__main__':
     main()

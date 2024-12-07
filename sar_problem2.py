@@ -8,25 +8,8 @@ import sar_domain
 
 the_domain = sar_domain.domain
 
-rigid = sar_domain.rigid.copy()
-initial = sar_domain.initial.copy()
-
-rigid.types = {
-    'direction' : ['up', 'down', 'left', 'right'],
-    'person' : [],
-    'hospital' : [],
-    'wall' : [],
-    'robot' : [],
-    'location' : [],
-    'chicken' : []
-}
-
-rigid.relations = {
-    'connected' : {},
-    'hospital-at' : {},
-    'wall-at' : {},
-    'chicken-at' : {},
-}
+rigid = sar_domain.empty_rigid()
+initial = sar_domain.empty_initial()
 
 rigid.types['location'] = ['f0-0f', 'f0-1f', 'f0-2f', 'f0-3f', 'f0-4f', 'f0-5f',
                            'f1-0f', 'f1-1f', 'f1-2f', 'f1-3f', 'f1-4f', 'f1-5f',
@@ -138,7 +121,7 @@ goal = [('person_at', 'person0', 'f5-5f')]
 
 def main():
     sar_domain.rigid = rigid
-    sar_domain.run_lookahead(initial, goal, 45, render=True)    
+    sar_domain.run_lookahead(initial, goal, prob_idx=40, render=True)    
 
 if __name__ == "__main__":
     main()

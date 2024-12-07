@@ -1,3 +1,4 @@
+import matplotlib; matplotlib.use('agg')
 import sys, cv2, imageio, pddlgym, random, time, numpy as np, re
 
 from GTPyhop import gtpyhop
@@ -25,6 +26,37 @@ rigid.relations = {
     'wall-at' : {},
     'chicken-at' : {},
 }
+
+def empty_rigid():
+    rigid = gtpyhop.State('rigid relations')
+    # add types for problem-specific objects in problem file
+    rigid.types = {
+        'direction' : ['up', 'down', 'left', 'right'],
+        'person' : [],
+        'hospital' : [],
+        'wall' : [],
+        'robot' : [],
+        'location' : [],
+        'chicken' : []
+    }
+
+    rigid.relations = {
+        'connected' : {},
+        'hospital-at' : {},
+        'wall-at' : {},
+        'chicken-at' : {},
+    }
+
+    return rigid
+
+def empty_initial():
+    initial = gtpyhop.State('state0')
+    initial.person_at = {}
+    initial.robot_at = {}
+    initial.carrying = {}
+    initial.clear = {}
+
+    return initial
 
 initial = gtpyhop.State('state0')
 initial.person_at = {}
@@ -126,9 +158,11 @@ def adjacent(curr_loc, dest):
 
 loc_reg = re.compile("f(\d+)-(\d+)f")
 
-def best_dir(state, curr, dest):
+def best_dir(state, curr, dest, visited):
     lowest_dist = np.inf
-    best_dirs = []
+    best_dirs = {}
+
+    not_visited = set()
 
     for dir in rigid.types['direction']:
         if rigid.relations['connected'][curr].get(dir) is None \
@@ -136,6 +170,9 @@ def best_dir(state, curr, dest):
             continue
 
         new_loc = rigid.relations['connected'][curr][dir]
+
+        if not new_loc in visited:
+            not_visited.add(dir)
 
         search1 = loc_reg.search(new_loc)
         search2 = loc_reg.search(dest)
@@ -146,9 +183,17 @@ def best_dir(state, curr, dest):
         
         if dist < lowest_dist:
             lowest_dist = dist
-            best_dirs = [dir]
+            best_dirs = {dir}
         elif dist == lowest_dist:
-            best_dirs.append(dir)
+            best_dirs.add(dir)
+
+    best_unvisited = best_dirs.intersection(not_visited)
+    if len(best_unvisited) > 0:
+        return best_unvisited
+    elif len(not_visited) > 0:
+        return not_visited
+    elif len(best_dirs.difference(visited)) > 0:
+        best_dirs = best_dirs.difference(visited)
         
     return best_dirs
 
@@ -164,17 +209,19 @@ def navigate(state, rob, dest):
             return [('move', rob, curr_loc, dest, adj)]
         else:
             result = []
+            visited = {curr_loc}
 
             while adj is None:
-                dirs = best_dir(state, curr_loc, dest)
+                dirs = best_dir(state, curr_loc, dest, visited)
 
                 if len(dirs) == 1:
-                    dir = dirs[0]
+                    dir = dirs.pop()
                 else:
-                    dir = random.choice(dirs)
+                    dir = random.choice(list(dirs))
 
                 new_loc = rigid.relations['connected'][curr_loc][dir]
                 result.append(('move', rob, curr_loc, new_loc, dir))
+                visited.add(new_loc)
 
                 curr_loc = new_loc
                 adj = adjacent(curr_loc, dest)
@@ -343,12 +390,24 @@ def run_lazy_lookahead(initial, goals, prob_idx=0,
 
     return (end - start) // 1000000, plan_length, recurse_errors
 
-def run_lookahead(initial, goals, rigid, prob_idx=0, 
+def run_lookahead(initial, goals, prob_idx=0, 
                   render=False, result_print=False):
     gtpyhop.verbose = 0
     start = time.time_ns()
     plan_length = 0
     recurse_errors = 0
+
+    # set up PDDLGym environment and observation
+    env = pddlgym.make('SearchAndRescueLevel7-v0')
+    env.fix_problem_index(prob_idx)
+    obs, debuginfo = env.reset()
+
+    new_state = initial.copy()
+    last_plan = 0
+
+    if render:
+        cv2.imshow("Search And Rescue Render", env.render())
+        cv2.waitKey(1)
 
     plan = None
     while plan is None:
@@ -356,18 +415,6 @@ def run_lookahead(initial, goals, rigid, prob_idx=0,
             plan = gtpyhop.find_plan(initial, goals)
         except RecursionError:
             recurse_errors += 1
-
-    # set up PDDLGym environment and observation
-    env = pddlgym.make('SearchAndRescueLevel7-v0')
-    env.fix_problem_index(prob_idx)
-    obs, debuginfo = env.reset()
-    img = env.render()
-
-    new_state = initial.copy()
-
-    imageio.imwrite("start_state.png", img)
-
-    last_plan = 0
 
     while plan != []:
         act = plan.pop(0)
@@ -399,8 +446,6 @@ def run_lookahead(initial, goals, rigid, prob_idx=0,
         
         for literal in obs:
             if literal[0] == 'carrying':
-                if new_state.carrying['robot0'] == None:
-                    imageio.imwrite("pickup_state.png", img)
                 new_state.carrying['robot0'] = literal[1]
             if literal[0] in rigid.types['person']:
                 new_state.person_at[literal[0]] = coord_to_loc(literal[1])
@@ -415,7 +460,7 @@ def run_lookahead(initial, goals, rigid, prob_idx=0,
                 except RecursionError:
                     recurse_errors += 1
 
-            if len(new_plan) < len(plan):
+            if len(new_plan) < len(plan) or len(plan) == 0:
                 plan = new_plan
         
         plan_length += 1

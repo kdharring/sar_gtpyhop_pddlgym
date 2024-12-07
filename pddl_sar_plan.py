@@ -1,5 +1,5 @@
 # Must install bison and flex for ff.FF to run
-
+import matplotlib; matplotlib.use('agg')
 import pddlgym, cv2, time, numpy as np
 from pddlgym_planners import ff, fd
 
@@ -225,4 +225,4 @@ def run_lookahead_ff(prob_idx, render=False, result_print=False):
     return (end - start) // 1000000, plan_length
 
 if __name__ == '__main__':
-    run_lazy_lookahead_fd(50, '--search "astar(lmcut())"', result_print=True)
+    run_lookahead_fd(46, '--search "astar(blind())"', render=True)
